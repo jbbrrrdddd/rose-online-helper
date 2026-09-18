@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Game Auto Helper",
+  "version": "2.1.0",
+  "description": "Locks automation to the current game tab with explicit script injection and background-safe DOM monitoring.",
+  "permissions": [
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Game Auto Helper"
+  }
+}
