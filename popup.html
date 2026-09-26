@@ -3,5 +3,5 @@
 <section><label><input id="hpEnabled" type="checkbox"> HP automation</label><div class="row">Below <input id="hpThreshold" type="number" min="1" max="100"> % <select id="hpKey"></select></div><div class="row">Cooldown <input id="hpCooldown" type="number" min="100" step="100"> ms</div></section>
 <section><label><input id="sgEnabled" type="checkbox"> SG automation</label><div class="row">Below <input id="sgThreshold" type="number" min="1" max="100"> % <select id="sgKey"></select></div><div class="row">Cooldown <input id="sgCooldown" type="number" min="100" step="100"> ms</div></section>
 <section><label><input id="timedEnabled" type="checkbox"> Timed key</label><div class="row">Press <select id="timedKey"></select> every <input id="timedIntervalSec" type="number" min="0.2" step="0.1"> sec</div></section>
-<button id="toggle">LOCK THIS TAB &amp; START</button><div class="tests"><button data-key="F1">Test F1</button><button data-key="F2">Test F2</button><button data-key="F3">Test F3</button></div>
-<p class="note">Keep the game tab open. Test the keys before relying on automation.</p><script src="popup.js"></script></body></html>
+<button id="toggle">START THIS TAB</button><div class="tests"><button data-key="F1">Test F1</button><button data-key="F2">Test F2</button><button data-key="F3">Test F3</button></div>
+<p class="note">Settings and RUN/STOP state are independent for each Chrome tab.</p><script src="popup.js"></script></body></html>

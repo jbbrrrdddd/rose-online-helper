@@ -1,5 +1,6 @@
-if (!window.__GAME_AUTO_HELPER_V21__) {
-window.__GAME_AUTO_HELPER_V21__ = true;
+
+if (!window.__GAME_AUTO_HELPER_V30__) {
+window.__GAME_AUTO_HELPER_V30__ = true;
 
 const DEFAULTS = {
   hpEnabled:true, hpThreshold:80, hpKey:'F1', hpCooldown:1000,
@@ -10,8 +11,24 @@ const DEFAULTS = {
 let cfg={...DEFAULTS};
 let running=false;
 let lastHP=0, lastSG=0, lastTimed=0;
-let hpObserver=null, sgObserver=null, rootObserver=null;
-let timer=null;
+let hpObserver=null, sgObserver=null, rootObserver=null, zoneObserver=null, timer=null;
+let startZone=null;
+let stoppedByZoneChange=false;
+
+function readZone(){
+  const el=document.querySelector('.titlebar .label.zone, .label.zone');
+  const z=el?.textContent?.trim();
+  return z || null;
+}
+
+function zoneGuard(){
+  if(!running || !startZone) return;
+  const current=readZone();
+  if(current && current !== startZone){
+    stoppedByZoneChange=true;
+    stop();
+  }
+}
 
 function keyCodeFor(key){
   const m=/^F([1-9]|1[0-2])$/.exec(key);
@@ -19,25 +36,10 @@ function keyCodeFor(key){
 }
 
 function dispatchGameKey(key){
-  // IMPORTANT: events are dispatched only into THIS tab's DOM.
-  // No OS-level/global key injection is used.
   const keyCode=keyCodeFor(key);
-  const targets=[
-    document.activeElement,
-    document.querySelector('canvas'),
-    document.body,
-    document.documentElement,
-    document,
-    window
-  ].filter(Boolean);
-
-  const opts={
-    key, code:key, keyCode, which:keyCode,
-    bubbles:true, cancelable:true, composed:true
-  };
-
-  // Use the first sensible DOM target and allow bubbling to document/window.
-  const target=targets[0] || document;
+  const target=document.activeElement || document.querySelector('canvas') ||
+               document.body || document.documentElement || document;
+  const opts={key,code:key,keyCode,which:keyCode,bubbles:true,cancelable:true,composed:true};
   target.dispatchEvent(new KeyboardEvent('keydown',opts));
   target.dispatchEvent(new KeyboardEvent('keypress',opts));
   target.dispatchEvent(new KeyboardEvent('keyup',opts));
@@ -47,7 +49,6 @@ function percentFromWidth(el){
   const n=parseFloat(el?.style?.width||'');
   return Number.isFinite(n)?n:null;
 }
-
 function readHP(){
   const root=document.querySelector('.progressbar.health.percent');
   if(!root) return null;
@@ -55,7 +56,6 @@ function readHP(){
   if(Number.isFinite(pct)) return pct;
   return percentFromWidth(root.querySelector('.bar'));
 }
-
 function readSG(){
   const root=document.querySelector('.progressbar.summon');
   if(!root) return null;
@@ -69,23 +69,19 @@ function checkHP(){
   if(!running || !cfg.hpEnabled) return;
   const hp=readHP(), now=Date.now();
   if(hp!==null && hp < +cfg.hpThreshold && now-lastHP >= +cfg.hpCooldown){
-    dispatchGameKey(cfg.hpKey);
-    lastHP=now;
+    dispatchGameKey(cfg.hpKey); lastHP=now;
   }
 }
-
 function checkSG(){
   if(!running || !cfg.sgEnabled) return;
   const sg=readSG(), now=Date.now();
   if(sg!==null && sg < +cfg.sgThreshold && now-lastSG >= +cfg.sgCooldown){
-    dispatchGameKey(cfg.sgKey);
-    lastSG=now;
+    dispatchGameKey(cfg.sgKey); lastSG=now;
   }
 }
 
 function attachObservers(){
-  hpObserver?.disconnect(); sgObserver?.disconnect(); rootObserver?.disconnect();
-
+  hpObserver?.disconnect(); sgObserver?.disconnect(); rootObserver?.disconnect(); zoneObserver?.disconnect();
   const hp=document.querySelector('.progressbar.health.percent');
   const sg=document.querySelector('.progressbar.summon');
 
@@ -98,77 +94,55 @@ function attachObservers(){
     sgObserver.observe(sg,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['style']});
   }
 
-  // If the game rebuilds/replaces its HUD, automatically re-bind.
   rootObserver=new MutationObserver(()=>{
-    const newHp=document.querySelector('.progressbar.health.percent');
-    const newSg=document.querySelector('.progressbar.summon');
-    if((hp && newHp!==hp) || (!hp && newHp) || (sg && newSg!==sg) || (!sg && newSg)){
-      attachObservers();
-    }
+    const nh=document.querySelector('.progressbar.health.percent');
+    const ns=document.querySelector('.progressbar.summon');
+    if(nh!==hp || ns!==sg) attachObservers();
   });
   rootObserver.observe(document.documentElement,{subtree:true,childList:true});
+
+  const zone=document.querySelector('.titlebar .label.zone, .label.zone');
+  if(zone){
+    zoneObserver=new MutationObserver(zoneGuard);
+    zoneObserver.observe(zone,{subtree:true,childList:true,characterData:true});
+  }
 }
 
 function scheduleTimer(){
   clearTimeout(timer);
   if(!running) return;
   const interval=Math.max(200,+cfg.timedInterval||5000);
-  const due=Math.max(50, interval-(Date.now()-lastTimed));
+  const due=Math.max(50,interval-(Date.now()-lastTimed));
   timer=setTimeout(()=>{
+    zoneGuard();
     if(running && cfg.timedEnabled){
-      dispatchGameKey(cfg.timedKey);
-      lastTimed=Date.now();
+      dispatchGameKey(cfg.timedKey); lastTimed=Date.now();
     }
-    // Also serves as a low-frequency fallback if a game update did not mutate
-    // the exact nodes we observed.
-    checkHP();
-    checkSG();
-    scheduleTimer();
-  }, due);
+    checkHP(); checkSG(); scheduleTimer();
+  },due);
 }
 
-function start(){
-  running=true;
-  lastHP=0; lastSG=0; lastTimed=Date.now();
-  attachObservers();
-  checkHP(); checkSG();
-  scheduleTimer();
+function start(newCfg){
+  cfg={...DEFAULTS,...newCfg};
+  startZone=readZone();
+  stoppedByZoneChange=false;
+  running=true; lastHP=0; lastSG=0; lastTimed=Date.now();
+  attachObservers(); checkHP(); checkSG(); scheduleTimer();
 }
-
 function stop(){
-  running=false;
-  clearTimeout(timer); timer=null;
-  hpObserver?.disconnect(); sgObserver?.disconnect(); rootObserver?.disconnect();
+  running=false; clearTimeout(timer); timer=null;
+  hpObserver?.disconnect(); sgObserver?.disconnect(); rootObserver?.disconnect(); zoneObserver?.disconnect();
 }
-
-chrome.storage.local.get(DEFAULTS,x=>{
-  for(const k of Object.keys(DEFAULTS)) if(x[k]!==undefined) cfg[k]=x[k];
-});
-
-chrome.storage.onChanged.addListener(ch=>{
-  for(const [k,v] of Object.entries(ch)) if(k in DEFAULTS) cfg[k]=v.newValue;
+function updateConfig(newCfg){
+  cfg={...cfg,...newCfg};
   if(running) scheduleTimer();
-});
+}
 
 chrome.runtime.onMessage.addListener((msg,_,send)=>{
-  if(msg.type==='start'){
-    start();
-    send({ok:true,hp:readHP(),sg:readSG(),running});
-    return;
-  }
-  if(msg.type==='stop'){
-    stop();
-    send({ok:true,running});
-    return;
-  }
-  if(msg.type==='status'){
-    send({hp:readHP(),sg:readSG(),running});
-    return;
-  }
-  if(msg.type==='testKey'){
-    dispatchGameKey(msg.key);
-    send({ok:true});
-  }
+  if(msg.type==='start'){ start(msg.config||{}); send({ok:true,hp:readHP(),sg:readSG(),zone:readZone(),startZone,running,stoppedByZoneChange,config:cfg}); return; }
+  if(msg.type==='stop'){ stop(); send({ok:true,running}); return; }
+  if(msg.type==='updateConfig'){ updateConfig(msg.config||{}); send({ok:true,running,config:cfg}); return; }
+  if(msg.type==='status'){ zoneGuard(); send({ok:true,hp:readHP(),sg:readSG(),zone:readZone(),startZone,running,stoppedByZoneChange,config:cfg}); return; }
+  if(msg.type==='testKey'){ dispatchGameKey(msg.key); send({ok:true}); return; }
 });
-
 }

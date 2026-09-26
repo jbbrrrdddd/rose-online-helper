@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Game Auto Helper",
-  "version": "2.1.0",
-  "description": "Locks automation to the current game tab with explicit script injection and background-safe DOM monitoring.",
+  "version": "3.1.0",
+  "description": "Per-tab game helper with automatic stop when the character changes maps/zones.",
   "permissions": [
     "scripting",
     "storage",
